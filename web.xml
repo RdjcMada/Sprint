@@ -8,7 +8,7 @@
   <!-- Configuration du FrontController -->
   <servlet>
     <servlet-name>frontController</servlet-name>
-    <servlet-class>package.pattern.FrontController</servlet-class>
+    <servlet-class>pattern.FrontController</servlet-class>
     <load-on-startup>1</load-on-startup>
   </servlet>
 
