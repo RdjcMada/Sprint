@@ -1,5 +1,2 @@
 REM couper le fichier .jar vers lib 
-xcopy /s /q /y "application.jar" "C:\Program Files\Apache Software Foundation\Tomcat 10.1\webapps\test\WEB-INF\lib"
-
-REM couper le fichier .jar vers lib 
-xcopy /s /q /y "web.xml" "C:\Program Files\Apache Software Foundation\Tomcat 10.1\webapps\test\WEB-INF"s
+xcopy /s /q /y "application.jar" "D:\itu\S4\Mr_Naina\Nouveau dossier\Nouveau dossier\SprintTest2\lib"
