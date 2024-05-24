@@ -3,8 +3,8 @@ package initialise;
 import java.lang.annotation.*;
 
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.TYPE)
+@Target(ElementType.METHOD)
 
-public @interface Controller {
-
+public @interface AnnotationMethode {
+    String value();
 }
