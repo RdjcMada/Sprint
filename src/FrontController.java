@@ -25,7 +25,7 @@ public class FrontController extends HttpServlet {
     }
 
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
+            throws ServletException, IOException, Exception {
         response.setContentType("text/html;charset=UTF-8");
 
         try (PrintWriter out = response.getWriter()) {
@@ -41,7 +41,8 @@ public class FrontController extends HttpServlet {
                 Mapping mapping = utl.ifMethod(request, this.urlMethod);
                 out.println("<p> Classe : " + mapping.getKey() + "</p>");
                 out.println("<p> Mehtode: " + mapping.getValue() + "</p>");
-            }else{
+                out.println("<p> Value returned : " + this.utl.callMethod(mapping) + "</p>");
+            } else {
                 out.println("<p> Error 404 : Not found </p>");
             }
 
@@ -53,12 +54,20 @@ public class FrontController extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        processRequest(request, response);
+        try {
+            processRequest(request, response);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        processRequest(request, response);
+        try {
+            processRequest(request, response);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
