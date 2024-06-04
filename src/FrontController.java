@@ -27,27 +27,17 @@ public class FrontController extends HttpServlet {
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException, Exception {
         response.setContentType("text/html;charset=UTF-8");
-
+        
         try (PrintWriter out = response.getWriter()) {
-            out.println("<!DOCTYPE html>");
-            out.println("<html>");
-            out.println("<head>");
-            out.println("<title>FrontController</title>");
-            out.println("</head>");
-            out.println("<body>");
-            out.println("<h1>Servlet FrontController</h1>");
-            out.println("<p>" + request.getRequestURL() + "</p>");
             if (utl.ifMethod(request, this.urlMethod) != null) {
                 Mapping mapping = utl.ifMethod(request, this.urlMethod);
-                out.println("<p> Classe : " + mapping.getKey() + "</p>");
-                out.println("<p> Mehtode: " + mapping.getValue() + "</p>");
-                out.println("<p> Value returned : " + this.utl.callMethod(mapping) + "</p>");
+                this.utl.MappingHandler(request,response,mapping);
             } else {
                 out.println("<p> Error 404 : Not found </p>");
             }
-
-            out.println("</body>");
-            out.println("</html>");
+        }catch(Exception e){
+            PrintWriter out = response.getWriter(); 
+            out.println(e.getMessage());
         }
     }
 
