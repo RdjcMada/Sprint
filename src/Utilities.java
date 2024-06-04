@@ -1,9 +1,12 @@
 package initialise;
 
 import java.io.File;
+import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.*;
+
+import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
@@ -11,6 +14,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 public class Utilities {
+    HashMap<String, Mapping> hashMap;
+
     // Sprint 1 : show the url
     public void initializeControllers(HttpServlet svr, List<String> controllerList,
             HashMap<String, Mapping> urlMethod) {
@@ -70,6 +75,7 @@ public class Utilities {
                 }
             }
         }
+        this.hashMap = urlMethod;
     }
 
     public String extractRelativePath(HttpServletRequest request) {
@@ -87,7 +93,8 @@ public class Utilities {
     }
 
     // Sprint 3 : call the method of the controller
-    public Object callMethod(Mapping mapping) throws Exception {
+    public Object callMethod(HttpServletRequest request, HttpServletResponse response, Mapping mapping)
+            throws Exception {
         try {
             // get the class
             Class<?> clazz = Class.forName(mapping.getKey());
@@ -98,6 +105,46 @@ public class Utilities {
             return (Object) method.invoke(obj);
         } catch (Exception e) {
             throw e;
+        }
+    }
+
+    // Sprint 4 : redirect to another page and send all the attribut if the returned
+    // value is ModelVIew
+    public void MappingHandler(HttpServletRequest request, HttpServletResponse response, Mapping mapping)
+            throws Exception {
+        Object obj = this.callMethod(request, response, mapping);
+        if (obj instanceof ModelView) {
+            ModelView mv = (ModelView) obj;
+            if (mv.getProperties() != null && !mv.getProperties().isEmpty()) {
+                System.out.println("here1");
+                for (Map.Entry<String, Object> entry : mv.getProperties().entrySet()) {
+                    String key = entry.getKey();
+                    Object value = entry.getValue();
+                    if (key != null && value != null) {
+                        request.setAttribute(key, value);
+                    } else {
+                        System.out.println("Null key or value found: key = " + key + ", value = " + value);
+                    }
+                }
+                System.out.println("here");
+            } else {
+                System.out.println("The properties HashMap is null or empty.");
+            }
+
+            // Construct the correct relative URL
+            String relativeUrl = mv.getUrl();
+            if (!relativeUrl.startsWith("/")) {
+                relativeUrl = "/" + relativeUrl;
+            }
+
+            RequestDispatcher dispatcher = request.getRequestDispatcher(relativeUrl);
+            dispatcher.forward(request, response);
+        } else {
+            try (PrintWriter out = response.getWriter()) {
+                out.println("<p>Classe : " + mapping.getKey() + "</p>");
+                out.println("<p>Méthode : " + mapping.getValue() + "</p>");
+                out.println("<p>Value returned : " + obj + "</p>");
+            }
         }
     }
 }
