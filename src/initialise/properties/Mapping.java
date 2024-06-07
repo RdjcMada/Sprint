@@ -1,7 +1,4 @@
-package initialise;
-
-import java.util.HashMap;
-import java.util.Map;
+package initialise.properties;
 
 public class Mapping {
     String nameClass;
