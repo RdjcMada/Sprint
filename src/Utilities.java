@@ -23,8 +23,13 @@ public class Utilities {
             ServletContext context = svr.getServletContext();
             String packageName = context.getInitParameter("Controller");
 
-            if (this.ifPackageExist(packageName)) {
-
+            if (packageName == null || packageName.trim().isEmpty()) {
+                errors.add(new Exception("No package controller defined"));
+                return;
+            } else if (!this.ifPackageExist(packageName)) {
+                errors.add(new Exception("Package '" + packageName + "' not found"));
+                return;
+            } else {
                 ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
                 Enumeration<URL> resources = classLoader.getResources(packageName.replace('.', '/'));
 
@@ -35,8 +40,6 @@ public class Utilities {
                         scanControllers(file, packageName, controllerList, urlMethod, errors);
                     }
                 }
-            } else {
-                errors.add(new Exception("Package '" + packageName + "' not found"));
             }
 
         } catch (Exception e) {
@@ -76,7 +79,6 @@ public class Utilities {
                                         urlMethod.put(annt.value(), map);
                                     } else {
                                         errors.add(new Exception("url : " + annt.value() + " duplicated"));
-                                        
                                         return;
                                     }
                                 }
