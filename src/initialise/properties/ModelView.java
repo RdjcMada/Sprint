@@ -1,4 +1,4 @@
-package initialise;
+package initialise.properties;
 
 import java.util.HashMap;
 

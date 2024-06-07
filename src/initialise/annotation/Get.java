@@ -1,10 +1,10 @@
-package initialise;
+package initialise.annotation;
 
 import java.lang.annotation.*;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 
-public @interface AnnotationMethode {
+public @interface Get {
     String value();
 }
