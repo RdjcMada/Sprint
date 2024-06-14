@@ -42,6 +42,7 @@ public class FrontController extends HttpServlet {
             utl.runFramework(request, response);
         } catch (Exception e) {
             out.print(e.getMessage());
+            e.printStackTrace();
         }
     }
 

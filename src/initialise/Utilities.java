@@ -3,11 +3,14 @@ package initialise;
 import java.io.File;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.net.URL;
 import java.util.*;
 
+import initialise.annotation.Attribute;
 import initialise.annotation.Controller;
 import initialise.annotation.Get;
+import initialise.properties.AnnotatedParameter;
 import initialise.properties.Mapping;
 import initialise.properties.ModelView;
 import jakarta.servlet.RequestDispatcher;
@@ -105,8 +108,34 @@ public class Utilities {
         try {
             Class<?> clazz = Class.forName(mapping.getKey());
             Object obj = clazz.getDeclaredConstructor().newInstance();
-            Method method = clazz.getMethod(mapping.getValue().trim());
-            return (Object) method.invoke(obj);
+            Method method = this.getMethod(request, response, mapping);
+
+            List<Object> parameterValues = new ArrayList<>();
+            for (Parameter parameter : method.getParameters()) {
+                // Get the value from get Parameter with the parameter name
+                String paraName = parameter.getName();
+                String value = request.getParameter(paraName.trim());
+                Attribute attribute = parameter.getAnnotation(Attribute.class);
+
+                if (value != null) {
+                    parameterValues.add(castValue(parameter.getType(), value));
+                } else if (attribute != null) {
+
+                    String parameterName = attribute.nom();
+                    String parameterValue = request.getParameter(parameterName);
+                    if (parameterValue != null) {
+                        parameterValues.add(castValue(parameter.getType(), parameterValue));
+                    } else {
+                        parameterValues.add(castValue(parameter.getType(), null)); // Or handle default values if
+                                                                                   // necessary
+                    }
+                } else {
+                    // Define the value as null if there no coresponding name or annotation
+                    parameterValues.add(castValue(parameter.getType(), null));
+                }
+            }
+
+            return method.invoke(obj, parameterValues.toArray());
         } catch (Exception e) {
             throw new Exception(e);
         }
@@ -121,11 +150,10 @@ public class Utilities {
                 for (Map.Entry<String, Object> entry : mv.getProperties().entrySet()) {
                     String key = entry.getKey();
                     Object value = entry.getValue();
-                    if (key != null && value != null) {
+                    if (key != null) {
                         request.setAttribute(key, value);
                     } else {
-                        throw new Exception(
-                                "Null key or value found: key = " + key + ", value = " + value);
+                        throw new Exception("Null key found: key = " + key);
                     }
                 }
             } else {
@@ -146,7 +174,7 @@ public class Utilities {
                 out.println("<p>Value returned : " + obj + "</p>");
             }
         } else {
-            throw new Exception("the return value an controler methods must be String or ModelView");
+            throw new Exception("The return value of controller methods must be String or ModelView");
         }
     }
 
@@ -168,5 +196,60 @@ public class Utilities {
         } else {
             return false;
         }
+    }
+
+    // Sprint 6:
+    public List<AnnotatedParameter> getAttributes(Method method) {
+        List<AnnotatedParameter> annotatedParameters = new ArrayList<>();
+
+        Parameter[] parameters = method.getParameters();
+        for (Parameter parameter : parameters) {
+            if (parameter.isAnnotationPresent(Attribute.class)) {
+                Attribute attribute = parameter.getAnnotation(Attribute.class);
+                annotatedParameters.add(new AnnotatedParameter(attribute.nom(), parameter.getType()));
+            }
+        }
+        return annotatedParameters;
+    }
+
+    public Method getMethod(HttpServletRequest request, HttpServletResponse response, Mapping mapping)
+            throws Exception {
+        try {
+            Class<?> clazz = Class.forName(mapping.getKey());
+            Method[] methods = clazz.getDeclaredMethods();
+            for (Method method : methods) {
+                if (method.getName().equals(mapping.getValue().trim())) {
+                    return method;
+                }
+            }
+            throw new Exception("No such method: " + mapping.getValue());
+        } catch (Exception e) {
+            throw new Exception(e);
+        }
+    }
+
+    public Object castValue(Class<?> type, String value) throws Exception {
+        if (type == String.class) {
+            return value;
+        } else if (type == int.class || type == Integer.class) {
+            if (value == null) {
+                return 0;
+            }
+            return Integer.parseInt(value);
+        } else if (type == float.class || type == Float.class) {
+            if (value == null) {
+                return 0;
+            }
+            return Float.parseFloat(value);
+        } else if (type == double.class || type == Double.class) {
+            if (value == null) {
+                return 0;
+            }
+            return Double.parseDouble(value);
+        } else if (type == boolean.class || type == Boolean.class) {
+            return Boolean.parseBoolean(value);
+        }
+        // Ajoutez d'autres types selon les besoins
+        throw new Exception("Unsupported type: " + type);
     }
 }
