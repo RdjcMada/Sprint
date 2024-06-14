@@ -112,15 +112,26 @@ public class Utilities {
 
             List<Object> parameterValues = new ArrayList<>();
             for (Parameter parameter : method.getParameters()) {
+                // Get the value from get Parameter with the parameter name
+                String paraName = parameter.getName();
+                String value = request.getParameter(paraName.trim());
                 Attribute attribute = parameter.getAnnotation(Attribute.class);
-                if (attribute != null) {
+
+                if (value != null) {
+                    parameterValues.add(castValue(parameter.getType(), value));
+                } else if (attribute != null) {
+
                     String parameterName = attribute.nom();
                     String parameterValue = request.getParameter(parameterName);
                     if (parameterValue != null) {
                         parameterValues.add(castValue(parameter.getType(), parameterValue));
                     } else {
-                        parameterValues.add(null); // Or handle default values if necessary
+                        parameterValues.add(castValue(parameter.getType(), null)); // Or handle default values if
+                                                                                   // necessary
                     }
+                } else {
+                    // Define the value as null if there no coresponding name or annotation
+                    parameterValues.add(castValue(parameter.getType(), null));
                 }
             }
 
@@ -211,7 +222,7 @@ public class Utilities {
                     return method;
                 }
             }
-            throw new NoSuchMethodException("No such method: " + mapping.getValue());
+            throw new Exception("No such method: " + mapping.getValue());
         } catch (Exception e) {
             throw new Exception(e);
         }
@@ -221,10 +232,19 @@ public class Utilities {
         if (type == String.class) {
             return value;
         } else if (type == int.class || type == Integer.class) {
+            if (value == null) {
+                return 0;
+            }
             return Integer.parseInt(value);
         } else if (type == float.class || type == Float.class) {
+            if (value == null) {
+                return 0;
+            }
             return Float.parseFloat(value);
         } else if (type == double.class || type == Double.class) {
+            if (value == null) {
+                return 0;
+            }
             return Double.parseDouble(value);
         } else if (type == boolean.class || type == Boolean.class) {
             return Boolean.parseBoolean(value);
