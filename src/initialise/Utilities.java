@@ -117,21 +117,27 @@ public class Utilities {
                 String value = request.getParameter(paraName.trim());
                 Attribute attribute = parameter.getAnnotation(Attribute.class);
 
-                if (value != null) {
-                    parameterValues.add(castValue(parameter.getType(), value));
-                } else if (attribute != null) {
-
-                    String parameterName = attribute.nom();
-                    String parameterValue = request.getParameter(parameterName);
-                    if (parameterValue != null) {
-                        parameterValues.add(castValue(parameter.getType(), parameterValue));
-                    } else {
-                        parameterValues.add(castValue(parameter.getType(), null)); // Or handle default values if
-                                                                                   // necessary
-                    }
+                if (parameter.getType() != String.class) {
+                    // Send data parameter
+                    this.sendDataObject(request, parameter.getType().getName(), parameterValues);
                 } else {
-                    // Define the value as null if there no coresponding name or annotation
-                    parameterValues.add(castValue(parameter.getType(), null));
+                    // Natural selection
+                    if (value != null) {
+                        parameterValues.add(castValue(parameter.getType(), value));
+                    } else if (attribute != null) { // Annotation selection
+
+                        String parameterName = attribute.nom();
+                        String parameterValue = request.getParameter(parameterName);
+                        if (parameterValue != null) {
+                            parameterValues.add(castValue(parameter.getType(), parameterValue));
+                        } else {
+                            parameterValues.add(castValue(parameter.getType(), null)); // Or handle default values if
+                                                                                       // necessary
+                        }
+                    } else { // set a null value if there no corresponding parameter
+                        // Define the value as null if there no coresponding name or annotation
+                        parameterValues.add(castValue(parameter.getType(), null));
+                    }
                 }
             }
 
@@ -228,6 +234,7 @@ public class Utilities {
         }
     }
 
+    /// Function to cast the value of the attribute
     public Object castValue(Class<?> type, String value) throws Exception {
         if (type == String.class) {
             return value;
@@ -252,4 +259,94 @@ public class Utilities {
         // Ajoutez d'autres types selon les besoins
         throw new Exception("Unsupported type: " + type);
     }
+
+    // Function for the sprint 7
+    /// Function to the objectParameters the value from the get http
+    public void sendDataObject(HttpServletRequest request, String nameObject, List<Object> parameterValues) throws Exception {
+        Enumeration<String> parameterNames = request.getParameterNames();
+        String[] packages = nameObject.trim().split("\\."); // Escape dot with double backslash
+        List<String> objectTreated = new ArrayList<>();
+    
+        while (parameterNames.hasMoreElements()) {
+            String parameterName = parameterNames.nextElement();
+    
+            // Check if the parameter name contains the last part of the package name and hasn't been processed yet
+            if (parameterName.trim().toLowerCase().contains(packages[packages.length - 1].toLowerCase())
+                    && !objectTreated.contains(packages[packages.length - 1].toLowerCase())) {
+                try {
+                    Class<?> clazz = Class.forName(nameObject);
+                    Object obj = clazz.getDeclaredConstructor().newInstance();
+    
+                    Enumeration<String> innerParameterNames = request.getParameterNames();
+    
+                    while (innerParameterNames.hasMoreElements()) {
+                        String attrib = innerParameterNames.nextElement();
+    
+                        // Check if the attribute name contains the last part of the package name
+                        if (attrib.trim().toLowerCase().contains(packages[packages.length - 1].toLowerCase())) {
+                            // Get the value to set
+                            String value = request.getParameter(attrib);
+                            // Determine the attribute name without the package prefix
+                            String prefix = packages[packages.length - 1].toLowerCase() + ".";
+                            if (attrib.toLowerCase().startsWith(prefix)) {
+                                String nameAttribute = attrib.substring(prefix.length());
+    
+                                // Capitalize the first letter of the attribute name
+                                nameAttribute = nameAttribute.substring(0, 1).toUpperCase() + nameAttribute.substring(1);
+    
+                                // Construct setter method name
+                                String setterMethodName = "set" + nameAttribute;
+    
+                                // Get the setter method
+                                Method[] methods = clazz.getMethods();
+                                Method setterMethod = null;
+                                for (Method method : methods) {
+                                    if (method.getName().equalsIgnoreCase(setterMethodName)) {
+                                        setterMethod = method;
+                                        break;
+                                    }
+                                }
+    
+                                if (setterMethod != null) {
+                                    // Get the parameter type of the setter method
+                                    Class<?>[] parameterTypes = setterMethod.getParameterTypes();
+                                    // Convert and cast value to the parameter type of the setter method
+                                    Object convertedValue = convertAndCastValue(value, parameterTypes[0]);
+                                    // Invoke the setter method on the object
+                                    setterMethod.invoke(obj, convertedValue);
+                                } else {
+                                    throw new Exception("Setter method not found for attribute: " + nameAttribute);
+                                }
+                            }
+                        }
+                    }
+    
+                    // Mark the class name as processed
+                    objectTreated.add(packages[packages.length - 1].toLowerCase());
+    
+                    // Add the value to the list of objects
+                    parameterValues.add(obj);
+    
+                } catch (Exception e) {
+                    throw new Exception("Error processing object: " + e.getMessage(), e);
+                }
+            }
+        }
+    }
+    
+    // Method to convert and cast value to the expected parameter type
+    private Object convertAndCastValue(String value, Class<?> targetType) {
+        if (targetType == String.class) {
+            return value;
+        } else if (targetType == Integer.class || targetType == int.class) {
+            return Integer.valueOf(value);
+        } else if (targetType == Double.class || targetType == double.class) {
+            return Double.valueOf(value);
+        } else if (targetType == Boolean.class || targetType == boolean.class) {
+            return Boolean.valueOf(value);
+        }
+        // Add more type conversions as needed for your application
+        return null;
+    }
+    
 }
