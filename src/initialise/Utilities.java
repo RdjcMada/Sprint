@@ -2,6 +2,7 @@ package initialise;
 
 import java.io.File;
 import java.io.PrintWriter;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.URL;
@@ -11,6 +12,7 @@ import initialise.annotation.Attribute;
 import initialise.annotation.Controller;
 import initialise.annotation.Get;
 import initialise.properties.AnnotatedParameter;
+import initialise.properties.CustomSession;
 import initialise.properties.Mapping;
 import initialise.properties.ModelView;
 import jakarta.servlet.RequestDispatcher;
@@ -18,10 +20,22 @@ import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 public class Utilities {
     HashMap<String, Mapping> hashMap;
+    CustomSession session;
 
+    // Getter and setter for the custom session
+    public CustomSession getSession() {
+        return session;
+    }
+
+    public void setSession(CustomSession session) {
+        this.session = session;
+    }
+
+    // All the functionnalities
     public void initializeControllers(HttpServlet svr, List<String> controllerList,
             HashMap<String, Mapping> urlMethod) throws Exception {
         ServletContext context = svr.getServletContext();
@@ -109,23 +123,46 @@ public class Utilities {
             Class<?> clazz = Class.forName(mapping.getKey());
             Object obj = clazz.getDeclaredConstructor().newInstance();
             Method method = this.getMethod(request, response, mapping);
-
             List<Object> parameterValues = new ArrayList<>();
-            for (Parameter parameter : method.getParameters()) {
-                // Get the value from get Parameter with the parameter name
-                String paraName = parameter.getName();
-                String value = request.getParameter(paraName.trim());
-                Attribute attribute = parameter.getAnnotation(Attribute.class);
 
+            // Set the value of session to the custom session :
+            this.session_To_custom_session(request, this.session);
+
+            //Handle if the the CustomController is an Attribute 
+            if(this.containsFieldOfType(obj.getClass(),CustomSession.class)){
+                Method methodSetter = obj.getClass().getMethod("setSession",CustomSession.class);
+                methodSetter.invoke(obj,this.session);
+            }
+
+            for (Parameter parameter : method.getParameters()) {
+                // Exception if the parameter isn't annoted
+                if (!parameter.isAnnotationPresent(Attribute.class)
+                        && !parameter.getType().equals(CustomSession.class)) {
+                    throw new Exception("Tous les paramètres doivent être annotés avec @Attribute");
+                }
+
+                /*
+                 * Section for the natural selection
+                 * // Get the value from get Parameter with the parameter name
+                 * String paraName = parameter.getName();
+                 * String value = request.getParameter(paraName.trim()); //For the natural
+                 * selection
+                 */
+
+                if (parameter.getType().equals(CustomSession.class)) {
+                    parameterValues.add(this.session);
+                } 
+
+                Attribute attribute = parameter.getAnnotation(Attribute.class);
                 if (parameter.getType() != String.class) {
                     // Send data parameter
                     this.sendDataObject(request, parameter.getType().getName(), parameterValues);
                 } else {
                     // Natural selection
-                    if (value != null) {
-                        parameterValues.add(castValue(parameter.getType(), value));
-                    } else if (attribute != null) { // Annotation selection
-
+                    // if (value != null) {
+                    // parameterValues.add(castValue(parameter.getType(), value));
+                    // } else
+                    if (attribute != null) { // Annotation selection
                         String parameterName = attribute.nom();
                         String parameterValue = request.getParameter(parameterName);
                         if (parameterValue != null) {
@@ -140,8 +177,12 @@ public class Utilities {
                     }
                 }
             }
+            Object val = method.invoke(obj, parameterValues.toArray());
 
-            return method.invoke(obj, parameterValues.toArray());
+            // Set the actual session to the customSession
+            customSession_To_session(request, this.session);
+
+            return val;
         } catch (Exception e) {
             throw new Exception(e);
         }
@@ -262,26 +303,27 @@ public class Utilities {
 
     // Function for the sprint 7
     /// Function to the objectParameters the value from the get http
-    public void sendDataObject(HttpServletRequest request, String nameObject, List<Object> parameterValues) throws Exception {
+    public void sendDataObject(HttpServletRequest request, String nameObject, List<Object> parameterValues)
+            throws Exception {
         Enumeration<String> parameterNames = request.getParameterNames();
         String[] packages = nameObject.trim().split("\\."); // Escape dot with double backslash
         List<String> objectTreated = new ArrayList<>();
-    
+
         while (parameterNames.hasMoreElements()) {
             String parameterName = parameterNames.nextElement();
-    
-            // Check if the parameter name contains the last part of the package name and hasn't been processed yet
+            // Check if the parameter name contains the last part of the package name and
+            // hasn't been processed yet
             if (parameterName.trim().toLowerCase().contains(packages[packages.length - 1].toLowerCase())
                     && !objectTreated.contains(packages[packages.length - 1].toLowerCase())) {
                 try {
                     Class<?> clazz = Class.forName(nameObject);
                     Object obj = clazz.getDeclaredConstructor().newInstance();
-    
+
                     Enumeration<String> innerParameterNames = request.getParameterNames();
-    
+
                     while (innerParameterNames.hasMoreElements()) {
                         String attrib = innerParameterNames.nextElement();
-    
+
                         // Check if the attribute name contains the last part of the package name
                         if (attrib.trim().toLowerCase().contains(packages[packages.length - 1].toLowerCase())) {
                             // Get the value to set
@@ -290,13 +332,14 @@ public class Utilities {
                             String prefix = packages[packages.length - 1].toLowerCase() + ".";
                             if (attrib.toLowerCase().startsWith(prefix)) {
                                 String nameAttribute = attrib.substring(prefix.length());
-    
+
                                 // Capitalize the first letter of the attribute name
-                                nameAttribute = nameAttribute.substring(0, 1).toUpperCase() + nameAttribute.substring(1);
-    
+                                nameAttribute = nameAttribute.substring(0, 1).toUpperCase()
+                                        + nameAttribute.substring(1);
+
                                 // Construct setter method name
                                 String setterMethodName = "set" + nameAttribute;
-    
+
                                 // Get the setter method
                                 Method[] methods = clazz.getMethods();
                                 Method setterMethod = null;
@@ -306,7 +349,7 @@ public class Utilities {
                                         break;
                                     }
                                 }
-    
+
                                 if (setterMethod != null) {
                                     // Get the parameter type of the setter method
                                     Class<?>[] parameterTypes = setterMethod.getParameterTypes();
@@ -320,20 +363,20 @@ public class Utilities {
                             }
                         }
                     }
-    
+
                     // Mark the class name as processed
                     objectTreated.add(packages[packages.length - 1].toLowerCase());
-    
+
                     // Add the value to the list of objects
                     parameterValues.add(obj);
-    
+
                 } catch (Exception e) {
                     throw new Exception("Error processing object: " + e.getMessage(), e);
                 }
             }
         }
     }
-    
+
     // Method to convert and cast value to the expected parameter type
     private Object convertAndCastValue(String value, Class<?> targetType) {
         if (targetType == String.class) {
@@ -348,5 +391,57 @@ public class Utilities {
         // Add more type conversions as needed for your application
         return null;
     }
+
+    // Sprint 8 : session handler
+    ////If the CustomController is as an parameters
+    public void customSession_To_session(HttpServletRequest request, CustomSession c_session) {
+        // Set all the variable that will be used
+        HttpSession session = request.getSession();
+        for (Map.Entry<String, Object> entry : c_session.getProperties().entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            session.setAttribute(key, value);
+        }
+    }
+
+    public void session_To_custom_session(HttpServletRequest request, CustomSession c_session) {
+        // Create a new CustomSession if it's null
+        if (c_session == null) {
+            c_session = new CustomSession();
+        }
     
+        // Get all the value from the session
+        HttpSession session = request.getSession();
+        Enumeration<String> attributeNames = session.getAttributeNames();
+        HashMap<String, Object> sessionMap = c_session.getProperties();
+    
+        // Initialize sessionMap if it's null
+        if (sessionMap == null) {
+            sessionMap = new HashMap<>();
+            c_session.setProperties(sessionMap);  // Set the properties back to CustomSession
+        }
+    
+        // Populate sessionMap with session attributes
+        while (attributeNames.hasMoreElements()) {
+            String attributeName = attributeNames.nextElement();
+            Object attributeValue = session.getAttribute(attributeName);
+            sessionMap.put(attributeName, attributeValue);
+        }
+    }
+    
+    ///If the CustomController is as an attribute 
+    public  boolean containsFieldOfType(Class<?> targetClass, Class<?> fieldType) {
+        // Get all declared fields of the class
+        Field[] fields = targetClass.getDeclaredFields();
+        
+        // Iterate through each field
+        for (Field field : fields) {
+            // Check if the field's type matches the desired class type
+            if (field.getType().equals(fieldType)) {
+                return true;
+            }
+        }   
+        return false;
+    }
+
 }

@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
 import initialise.*;
+import initialise.properties.CustomSession;
 import initialise.properties.Mapping;
 
 public class FrontController extends HttpServlet {
@@ -22,8 +23,10 @@ public class FrontController extends HttpServlet {
     public void init() throws ServletException {
         controllerList = new ArrayList<>();
         urlMethod = new HashMap<>();
+        CustomSession session = new CustomSession();
         utl = new Utilities();
         try {
+            utl.setSession(session);
             utl.initializeControllers(this, this.controllerList, urlMethod);
         } catch (Exception e) {
             this.except = e;
