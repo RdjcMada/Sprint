@@ -1,5 +1,6 @@
 package pattern;
 
+//All the importation 
 import java.io.IOException;
 import java.io.PrintWriter;
 import jakarta.servlet.ServletException;
@@ -13,9 +14,11 @@ import initialise.*;
 import initialise.properties.CustomSession;
 import initialise.properties.Mapping;
 
+//the main class FrontController
 public class FrontController extends HttpServlet {
     List<String> controllerList;
     HashMap<String, Mapping> urlMethod;
+    HashMap<String,Mapping> typeMap;    
     Utilities utl;
     Exception except = null;
 
@@ -23,8 +26,10 @@ public class FrontController extends HttpServlet {
     public void init() throws ServletException {
         controllerList = new ArrayList<>();
         urlMethod = new HashMap<>();
+        typeMap = new HashMap<>();
         CustomSession session = new CustomSession();
         utl = new Utilities();
+        utl.setTypeMap(typeMap);
         try {
             utl.setSession(session);
             utl.initializeControllers(this, this.controllerList, urlMethod);

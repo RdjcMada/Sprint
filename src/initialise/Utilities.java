@@ -1,5 +1,6 @@
 package initialise;
 
+//. All the importation 
 import java.io.File;
 import java.io.PrintWriter;
 import java.lang.reflect.Field;
@@ -11,6 +12,8 @@ import java.util.*;
 import initialise.annotation.Attribute;
 import initialise.annotation.Controller;
 import initialise.annotation.Get;
+import initialise.annotation.RestAPI;
+
 import initialise.properties.AnnotatedParameter;
 import initialise.properties.CustomSession;
 import initialise.properties.Mapping;
@@ -22,8 +25,16 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
+
+//. The sub class Utilities (that directly iteract with the methods of the FrameWork)
 public class Utilities {
-    HashMap<String, Mapping> hashMap;
+    Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    HashMap<String, Mapping> hashMap; // To store all the method of the Controller
+    HashMap<String, Mapping> typeMap; // To store the type of the controller methods
+                                      // (<TypeAnnotation,name_to_call_the_method_to_the_url>)
     CustomSession session;
 
     // Getter and setter for the custom session
@@ -33,6 +44,10 @@ public class Utilities {
 
     public void setSession(CustomSession session) {
         this.session = session;
+    }
+
+    public void setTypeMap(HashMap<String, Mapping> typeMap) {
+        this.typeMap = typeMap;
     }
 
     // All the functionnalities
@@ -81,6 +96,7 @@ public class Utilities {
                         controllerList.add(className);
                         Method[] methods = clazz.getDeclaredMethods();
                         for (Method method : methods) {
+                            // To treat the annotation get
                             if (method.isAnnotationPresent(Get.class)) {
                                 Get annt = method.getAnnotation(Get.class);
                                 Mapping map = new Mapping();
@@ -88,6 +104,22 @@ public class Utilities {
                                 if (urlMethod.putIfAbsent(annt.value(), map) != null) {
                                     if (!urlMethod.containsKey(annt.value())) {
                                         urlMethod.put(annt.value(), map);
+                                        typeMap.put("Get", map);
+                                    } else {
+                                        throw new Exception("url : " + annt.value() + " duplicated");
+                                    }
+                                }
+                            }
+
+                            // To treat the annotation RestAPI
+                            if (method.isAnnotationPresent(RestAPI.class)) {
+                                RestAPI annt = method.getAnnotation(RestAPI.class);
+                                Mapping map = new Mapping();
+                                map.add(clazz.getName(), method.getName());
+                                if (urlMethod.putIfAbsent(annt.value(), map) != null) {
+                                    if (!urlMethod.containsKey(annt.value())) {
+                                        urlMethod.put(annt.value(), map);
+                                        typeMap.put("RestAPI", map);
                                     } else {
                                         throw new Exception("url : " + annt.value() + " duplicated");
                                     }
@@ -128,10 +160,10 @@ public class Utilities {
             // Set the value of session to the custom session :
             this.session_To_custom_session(request, this.session);
 
-            //Handle if the the CustomController is an Attribute 
-            if(this.containsFieldOfType(obj.getClass(),CustomSession.class)){
-                Method methodSetter = obj.getClass().getMethod("setSession",CustomSession.class);
-                methodSetter.invoke(obj,this.session);
+            // Handle if the the CustomSession is an Attribute
+            if (this.containsFieldOfType(obj.getClass(), CustomSession.class)) {
+                Method methodSetter = obj.getClass().getMethod("setSession", CustomSession.class);
+                methodSetter.invoke(obj, this.session);
             }
 
             for (Parameter parameter : method.getParameters()) {
@@ -151,7 +183,7 @@ public class Utilities {
 
                 if (parameter.getType().equals(CustomSession.class)) {
                     parameterValues.add(this.session);
-                } 
+                }
 
                 Attribute attribute = parameter.getAnnotation(Attribute.class);
                 if (parameter.getType() != String.class) {
@@ -182,6 +214,11 @@ public class Utilities {
             // Set the actual session to the customSession
             customSession_To_session(request, this.session);
 
+            // Treat the data to JSON if the annotation is
+            if (this.getTypeAnnotation(method.getName())) {
+                return this.gson.toJson(val);
+            }
+
             return val;
         } catch (Exception e) {
             throw new Exception(e);
@@ -191,6 +228,7 @@ public class Utilities {
     public void MappingHandler(HttpServletRequest request, HttpServletResponse response, Mapping mapping)
             throws Exception {
         Object obj = this.callMethod(request, response, mapping);
+
         if (obj instanceof ModelView) {
             ModelView mv = (ModelView) obj;
             if (mv.getProperties() != null && !mv.getProperties().isEmpty()) {
@@ -214,15 +252,20 @@ public class Utilities {
 
             RequestDispatcher dispatcher = request.getRequestDispatcher(relativeUrl);
             dispatcher.forward(request, response);
-        } else if (obj instanceof String) {
+        }
+        if (obj instanceof String) {
             try (PrintWriter out = response.getWriter()) {
                 out.println("<p>Classe : " + mapping.getKey() + "</p>");
                 out.println("<p>Méthode : " + mapping.getValue() + "</p>");
                 out.println("<p>Value returned : " + obj + "</p>");
             }
-        } else {
-            throw new Exception("The return value of controller methods must be String or ModelView");
         }
+        if (this.checkIfJson(obj)) {
+            try (PrintWriter out = response.getWriter()) {
+                out.println("<p>Value returned : " + obj + "</p>");
+            }
+        }
+        throw new Exception("The return value of controller methods must be String or ModelView");
     }
 
     public void runFramework(HttpServletRequest request, HttpServletResponse response) throws Exception {
@@ -393,7 +436,7 @@ public class Utilities {
     }
 
     // Sprint 8 : session handler
-    ////If the CustomController is as an parameters
+    /// If the CustomController is as an parameters
     public void customSession_To_session(HttpServletRequest request, CustomSession c_session) {
         // Set all the variable that will be used
         HttpSession session = request.getSession();
@@ -409,18 +452,18 @@ public class Utilities {
         if (c_session == null) {
             c_session = new CustomSession();
         }
-    
+
         // Get all the value from the session
         HttpSession session = request.getSession();
         Enumeration<String> attributeNames = session.getAttributeNames();
         HashMap<String, Object> sessionMap = c_session.getProperties();
-    
+
         // Initialize sessionMap if it's null
         if (sessionMap == null) {
             sessionMap = new HashMap<>();
-            c_session.setProperties(sessionMap);  // Set the properties back to CustomSession
+            c_session.setProperties(sessionMap); // Set the properties back to CustomSession
         }
-    
+
         // Populate sessionMap with session attributes
         while (attributeNames.hasMoreElements()) {
             String attributeName = attributeNames.nextElement();
@@ -428,20 +471,45 @@ public class Utilities {
             sessionMap.put(attributeName, attributeValue);
         }
     }
-    
-    ///If the CustomController is as an attribute 
-    public  boolean containsFieldOfType(Class<?> targetClass, Class<?> fieldType) {
+
+    /// If the CustomController is as an attribute
+    public boolean containsFieldOfType(Class<?> targetClass, Class<?> fieldType) {
         // Get all declared fields of the class
         Field[] fields = targetClass.getDeclaredFields();
-        
+
         // Iterate through each field
         for (Field field : fields) {
             // Check if the field's type matches the desired class type
             if (field.getType().equals(fieldType)) {
                 return true;
             }
-        }   
+        }
         return false;
     }
 
+    // Sprint 9 :
+    public Boolean getTypeAnnotation(String method) {
+        for (Map.Entry<String, Mapping> entry : typeMap.entrySet()) {
+            Mapping mapping = entry.getValue();
+            if (mapping.getValue().trim().equals(method.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public Boolean checkIfJson(Object obj) {
+        Gson gson = new Gson();
+        
+        // Try to parse the object to JSON
+        try {
+            String jsonString = gson.toJson(obj);  // Try to convert obj to JSON
+            return true;
+        } catch (JsonSyntaxException e) {
+            // obj is not valid JSON
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 }
