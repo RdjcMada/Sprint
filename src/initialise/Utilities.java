@@ -12,6 +12,8 @@ import java.util.*;
 import initialise.annotation.Attribute;
 import initialise.annotation.Controller;
 import initialise.annotation.Get;
+import initialise.annotation.Post;
+import initialise.annotation.Url;
 import initialise.annotation.RestAPI;
 
 import initialise.properties.AnnotatedParameter;
@@ -96,32 +98,33 @@ public class Utilities {
                         controllerList.add(className);
                         Method[] methods = clazz.getDeclaredMethods();
                         for (Method method : methods) {
-                            // To treat the annotation get
-                            if (method.isAnnotationPresent(Get.class)) {
-                                Get annt = method.getAnnotation(Get.class);
+                            // See if it's anoted @Url
+                            if (method.isAnnotationPresent(Url.class)) {
+                                Url annt = method.getAnnotation(Url.class);
                                 Mapping map = new Mapping();
                                 map.add(clazz.getName(), method.getName());
-                                if (urlMethod.putIfAbsent(annt.value(), map) != null) {
-                                    if (!urlMethod.containsKey(annt.value())) {
-                                        urlMethod.put(annt.value(), map);
-                                        typeMap.put("Get", map);
-                                    } else {
-                                        throw new Exception("url : " + annt.value() + " duplicated");
-                                    }
-                                }
-                            }
 
-                            // To treat the annotation RestAPI
-                            if (method.isAnnotationPresent(RestAPI.class)) {
-                                RestAPI annt = method.getAnnotation(RestAPI.class);
-                                Mapping map = new Mapping();
-                                map.add(clazz.getName(), method.getName());
-                                if (urlMethod.putIfAbsent(annt.value(), map) != null) {
-                                    if (!urlMethod.containsKey(annt.value())) {
-                                        urlMethod.put(annt.value(), map);
-                                        typeMap.put("RestAPI", map);
+                                if (method.isAnnotationPresent(Get.class)) {
+                                    map.setVerb("Get");
+                                }
+
+                                if (method.isAnnotationPresent(Post.class)) {
+                                    map.setVerb("Post");
+                                }
+
+                                if (method.isAnnotationPresent(RestAPI.class)) {
+                                    map.setVerb("RestAPI");
+                                }
+
+                                if (map.getVerb().equals("None")) {
+                                    map.setVerb("Get");
+                                }
+
+                                if (urlMethod.putIfAbsent(annt.path(), map) != null) {
+                                    if (!urlMethod.containsKey(annt.path())) {
+                                        urlMethod.put(annt.path(), map);
                                     } else {
-                                        throw new Exception("url : " + annt.value() + " duplicated");
+                                        throw new Exception("url : " + annt.path() + " duplicated");
                                     }
                                 }
                             }
@@ -215,8 +218,12 @@ public class Utilities {
             customSession_To_session(request, this.session);
 
             // Treat the data to JSON if the annotation is
-            if (this.getTypeAnnotation(method.getName())) {
-                return this.gson.toJson(val);
+            if (mapping.getVerb().equals("RestAPI")) {
+                if (val instanceof ModelView) {
+                    return this.convertModelViewToJson((ModelView) val);
+                } else {
+                    return this.gson.toJson(val);
+                }
             }
 
             return val;
@@ -228,6 +235,9 @@ public class Utilities {
     public void MappingHandler(HttpServletRequest request, HttpServletResponse response, Mapping mapping)
             throws Exception {
         Object obj = this.callMethod(request, response, mapping);
+
+        //check the mapping 
+        this.ifMethodMapping(request,response,mapping);
 
         if (obj instanceof ModelView) {
             ModelView mv = (ModelView) obj;
@@ -253,6 +263,7 @@ public class Utilities {
             RequestDispatcher dispatcher = request.getRequestDispatcher(relativeUrl);
             dispatcher.forward(request, response);
         }
+        
         if (obj instanceof String) {
             try (PrintWriter out = response.getWriter()) {
                 out.println("<p>Classe : " + mapping.getKey() + "</p>");
@@ -260,11 +271,14 @@ public class Utilities {
                 out.println("<p>Value returned : " + obj + "</p>");
             }
         }
+
+        //Check if it is a JSON so print it 
         if (this.checkIfJson(obj)) {
             try (PrintWriter out = response.getWriter()) {
                 out.println("<p>Value returned : " + obj + "</p>");
             }
         }
+
         throw new Exception("The return value of controller methods must be String or ModelView");
     }
 
@@ -488,28 +502,38 @@ public class Utilities {
     }
 
     // Sprint 9 :
-    public Boolean getTypeAnnotation(String method) {
-        for (Map.Entry<String, Mapping> entry : typeMap.entrySet()) {
-            Mapping mapping = entry.getValue();
-            if (mapping.getValue().trim().equals(method.trim())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public Boolean checkIfJson(Object obj) {
         Gson gson = new Gson();
-        
+
         // Try to parse the object to JSON
         try {
-            String jsonString = gson.toJson(obj);  // Try to convert obj to JSON
+            String jsonString = gson.toJson(obj); // Try to convert obj to JSON
             return true;
         } catch (JsonSyntaxException e) {
             // obj is not valid JSON
             return false;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    public String convertModelViewToJson(ModelView view) {
+        // Créer une instance de Gson
+        Gson gson = new Gson();
+        HashMap<String, Object> properties = view.getProperties();
+        // Convertir les propriétés en JSON
+        return gson.toJson(properties);
+    }
+
+    //Sprint 10 : Mapping ver, URL
+    public void ifMethodMapping(HttpServletRequest request, HttpServletResponse response, Mapping mapping)throws Exception{   //Method that will check the mapping and the resquest method
+        String method = request.getMethod();
+        if(mapping.getVerb().toUpperCase().equals("RESTAPI")){
+            return;
+        }
+
+        if(!method.equals(mapping.getVerb().toUpperCase())){
+            throw new Exception("The method "+mapping.getVerb().toUpperCase()+ " can\'t be applied to  "+method);
         }
     }
 }
