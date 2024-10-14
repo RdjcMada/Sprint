@@ -20,6 +20,8 @@ import initialise.properties.AnnotatedParameter;
 import initialise.properties.CustomSession;
 import initialise.properties.Mapping;
 import initialise.properties.ModelView;
+import initialise.properties.VerbAction;
+
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServlet;
@@ -35,8 +37,6 @@ import com.google.gson.JsonSyntaxException;
 public class Utilities {
     Gson gson = new GsonBuilder().setPrettyPrinting().create();
     HashMap<String, Mapping> hashMap; // To store all the method of the Controller
-    HashMap<String, Mapping> typeMap; // To store the type of the controller methods
-                                      // (<TypeAnnotation,name_to_call_the_method_to_the_url>)
     CustomSession session;
 
     // Getter and setter for the custom session
@@ -46,10 +46,6 @@ public class Utilities {
 
     public void setSession(CustomSession session) {
         this.session = session;
-    }
-
-    public void setTypeMap(HashMap<String, Mapping> typeMap) {
-        this.typeMap = typeMap;
     }
 
     // All the functionnalities
@@ -100,32 +96,38 @@ public class Utilities {
                         for (Method method : methods) {
                             // See if it's anoted @Url
                             if (method.isAnnotationPresent(Url.class)) {
+                                // Initialize the variable that will be used
                                 Url annt = method.getAnnotation(Url.class);
                                 Mapping map = new Mapping();
-                                map.add(clazz.getName(), method.getName());
+                                VerbAction action = new VerbAction();
+                                action.setNameMethod(method.getName());
 
                                 if (method.isAnnotationPresent(Get.class)) {
-                                    map.setVerb("Get");
+                                    action.setVerb("Get");
                                 }
 
                                 if (method.isAnnotationPresent(Post.class)) {
-                                    map.setVerb("Post");
+                                    action.setVerb("Post");
                                 }
 
                                 if (method.isAnnotationPresent(RestAPI.class)) {
-                                    map.setVerb("RestAPI");
+                                    action.setVerb("RestAPI");
                                 }
 
-                                if (map.getVerb().equals("None")) {
-                                    map.setVerb("Get");
+                                if (action.getVerb().equals("None")) {
+                                    action.setVerb("Get");
                                 }
 
-                                if (urlMethod.putIfAbsent(annt.path(), map) != null) {
-                                    if (!urlMethod.containsKey(annt.path())) {
-                                        urlMethod.put(annt.path(), map);
-                                    } else {
-                                        throw new Exception("url : " + annt.path() + " duplicated");
-                                    }
+                                if (!urlMethod.containsKey(annt.path())) {
+                                    List<VerbAction> actions = new ArrayList<VerbAction>();
+                                    actions.add(action);
+                                    map.add(clazz.getName(), actions);
+                                    urlMethod.put(annt.path(), map);
+                                } else {
+                                    // Treatment to see if there is a duplicated verb in the same url
+                                    this.checkDuplicatedVerbUrl(urlMethod.get(annt.path().trim()), annt.path(), action);
+                                    // Treatment to set the new VerbAction to the verb
+                                    urlMethod.get(annt.path().trim()).getVerbActions().add(action);
                                 }
                             }
                         }
@@ -159,6 +161,7 @@ public class Utilities {
             Object obj = clazz.getDeclaredConstructor().newInstance();
             Method method = this.getMethod(request, response, mapping);
             List<Object> parameterValues = new ArrayList<>();
+            VerbAction action = this.getVerb(request, response, mapping);
 
             // Set the value of session to the custom session :
             this.session_To_custom_session(request, this.session);
@@ -218,7 +221,7 @@ public class Utilities {
             customSession_To_session(request, this.session);
 
             // Treat the data to JSON if the annotation is
-            if (mapping.getVerb().equals("RestAPI")) {
+            if (action.getVerb().equals("RestAPI")) {
                 if (val instanceof ModelView) {
                     return this.convertModelViewToJson((ModelView) val);
                 } else {
@@ -236,8 +239,8 @@ public class Utilities {
             throws Exception {
         Object obj = this.callMethod(request, response, mapping);
 
-        //check the mapping 
-        this.ifMethodMapping(request,response,mapping);
+        // check the mapping
+        this.ifMethodMapping(request, response, mapping);
 
         if (obj instanceof ModelView) {
             ModelView mv = (ModelView) obj;
@@ -263,16 +266,16 @@ public class Utilities {
             RequestDispatcher dispatcher = request.getRequestDispatcher(relativeUrl);
             dispatcher.forward(request, response);
         }
-        
+
         if (obj instanceof String) {
             try (PrintWriter out = response.getWriter()) {
                 out.println("<p>Classe : " + mapping.getKey() + "</p>");
-                out.println("<p>Méthode : " + mapping.getValue() + "</p>");
+                // out.println("<p>Méthode : " + mapping.getValue() + "</p>");
                 out.println("<p>Value returned : " + obj + "</p>");
             }
         }
 
-        //Check if it is a JSON so print it 
+        // Check if it is a JSON so print it
         if (this.checkIfJson(obj)) {
             try (PrintWriter out = response.getWriter()) {
                 out.println("<p>Value returned : " + obj + "</p>");
@@ -321,12 +324,18 @@ public class Utilities {
         try {
             Class<?> clazz = Class.forName(mapping.getKey());
             Method[] methods = clazz.getDeclaredMethods();
-            for (Method method : methods) {
-                if (method.getName().equals(mapping.getValue().trim())) {
-                    return method;
+            Method meth = null;
+            for (VerbAction act : mapping.getVerbActions()) {
+                for (Method method : methods) {
+                    if (method.getName().equals(act.getNameMethod().trim())) {
+                        if (request.getMethod().trim().toUpperCase().equals(act.getVerb().trim().toUpperCase())) {
+                            return method;
+                        }
+                        meth = method;
+                    }
                 }
             }
-            throw new Exception("No such method: " + mapping.getValue());
+            return meth;
         } catch (Exception e) {
             throw new Exception(e);
         }
@@ -525,15 +534,50 @@ public class Utilities {
         return gson.toJson(properties);
     }
 
-    //Sprint 10 : Mapping ver, URL
-    public void ifMethodMapping(HttpServletRequest request, HttpServletResponse response, Mapping mapping)throws Exception{   //Method that will check the mapping and the resquest method
+    // Sprint 10 : Mapping ver, URL
+    public void ifMethodMapping(HttpServletRequest request, HttpServletResponse response, Mapping mapping)
+            throws Exception { // Method that will check the mapping and the resquest method
         String method = request.getMethod();
-        if(mapping.getVerb().toUpperCase().equals("RESTAPI")){
+        VerbAction action = this.getVerb(request, response, mapping);
+        if (action.getVerb().toUpperCase().equals("RESTAPI")) {
             return;
         }
 
-        if(!method.equals(mapping.getVerb().toUpperCase())){
-            throw new Exception("The method "+mapping.getVerb().toUpperCase()+ " can\'t be applied to  "+method);
+        if (!method.equals(action.getVerb().toUpperCase())) {
+            throw new Exception("The method " + action.getVerb().toUpperCase() + " can\'t be applied to  " + method);
         }
     }
+
+    // Sprint 10 modified version
+    public void checkDuplicatedVerbUrl(Mapping mapping, String nameUrl, VerbAction action) throws Exception {
+        for (VerbAction act : mapping.getVerbActions()) {
+            if (act.getVerb().toUpperCase().trim().equals(action.getVerb().toUpperCase().trim())) {
+                throw new Exception("Error : duplicated verb with the same URL with the method : " + act.getNameMethod()
+                        + " and " + action.getNameMethod());
+            }
+        }
+    }
+
+    public VerbAction getVerb(HttpServletRequest request, HttpServletResponse response, Mapping mapping)
+            throws Exception {
+        try {
+            Class<?> clazz = Class.forName(mapping.getKey());
+            Method[] methods = clazz.getDeclaredMethods();
+            VerbAction verb = null ; 
+            for (VerbAction act : mapping.getVerbActions()) {
+                for (Method method : methods) {
+                    if (method.getName().equals(act.getNameMethod().trim())) {
+                        if (request.getMethod().trim().toUpperCase().equals(act.getVerb().trim().toUpperCase())) {
+                            return act;
+                        }
+                        verb = act;
+                    }
+                }
+            }
+            return verb;
+        } catch (Exception e) {
+            throw new Exception(e);
+        }
+    }
+
 }

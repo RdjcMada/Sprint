@@ -1,31 +1,25 @@
 package initialise.properties;
 
+import java.util.List;
+
 public class Mapping {
     String nameClass;
-    String nameMethod; 
-    String verb;
+    List<VerbAction> verbActions ; 
 
-    public Mapping(){
-        this.verb = "None";
-    }
-    public void add(String n1, String n2) {
+    public void add(String n1, List<VerbAction> n2) {
         this.nameClass = n1;
-        this.nameMethod = n2;
-    }
-
-    public String getValue() {
-        return nameMethod;
+        this.verbActions = n2;
     }
 
     public String getKey(){
         return nameClass;
     }
 
-    public void setVerb(String verb)  {
-        this.verb = verb;
+    public void setVerbActions(List<VerbAction> actions){
+        this.verbActions = actions;
     }
 
-    public String getVerb() {
-        return verb;
+    public List<VerbAction> getVerbActions(){
+        return this.verbActions;
     }
 }
