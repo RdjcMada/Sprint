@@ -29,7 +29,6 @@ public class FrontController extends HttpServlet {
         typeMap = new HashMap<>();
         CustomSession session = new CustomSession();
         utl = new Utilities();
-        utl.setTypeMap(typeMap);
         try {
             utl.setSession(session);
             utl.initializeControllers(this, this.controllerList, urlMethod);
