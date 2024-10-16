@@ -18,7 +18,7 @@ import initialise.properties.Mapping;
 public class FrontController extends HttpServlet {
     List<String> controllerList;
     HashMap<String, Mapping> urlMethod;
-    HashMap<String,Mapping> typeMap;    
+    HashMap<String, Mapping> typeMap;
     Utilities utl;
     Exception except = null;
 
@@ -30,6 +30,7 @@ public class FrontController extends HttpServlet {
         CustomSession session = new CustomSession();
         utl = new Utilities();
         try {
+            utl.setStatus(500);
             utl.setSession(session);
             utl.initializeControllers(this, this.controllerList, urlMethod);
         } catch (Exception e) {
@@ -40,16 +41,16 @@ public class FrontController extends HttpServlet {
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         response.setContentType("text/html;charset=UTF-8");
-        PrintWriter out = response.getWriter();
-        if(this.except != null){
-            out.print(this.except.getMessage());
+        if (this.except != null) {
+            response.setStatus(utl.getStatus());
+            this.utl.showException(request,response,this.except.getMessage());
             return;
         }
         try {
             utl.runFramework(request, response);
         } catch (Exception e) {
-            out.print(e.getMessage());
-            e.printStackTrace();
+            response.setStatus(utl.getStatus());
+            this.utl.showException(request,response,e.getMessage());
         }
     }
 

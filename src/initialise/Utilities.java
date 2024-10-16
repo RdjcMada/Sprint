@@ -2,6 +2,7 @@ package initialise;
 
 //. All the importation 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -38,6 +39,7 @@ public class Utilities {
     Gson gson = new GsonBuilder().setPrettyPrinting().create();
     HashMap<String, Mapping> hashMap; // To store all the method of the Controller
     CustomSession session;
+    int status;
 
     // Getter and setter for the custom session
     public CustomSession getSession() {
@@ -48,27 +50,39 @@ public class Utilities {
         this.session = session;
     }
 
+    public void setStatus(int status) {
+        this.status = status;
+    }
+
+    public int getStatus() {
+        return this.status;
+    }
+
     // All the functionnalities
     public void initializeControllers(HttpServlet svr, List<String> controllerList,
             HashMap<String, Mapping> urlMethod) throws Exception {
-        ServletContext context = svr.getServletContext();
-        String packageName = context.getInitParameter("Controller");
+        try {
+            ServletContext context = svr.getServletContext();
+            String packageName = context.getInitParameter("Controller");
 
-        if (packageName == null || packageName.trim().isEmpty()) {
-            throw new Exception("No package controller defined");
-        } else if (!this.ifPackageExist(packageName)) {
-            throw new Exception("Package '" + packageName + "' not found");
-        } else {
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            Enumeration<URL> resources = classLoader.getResources(packageName.replace('.', '/'));
+            if (packageName == null || packageName.trim().isEmpty()) {
+                throw new Exception("No package controller defined");
+            } else if (!this.ifPackageExist(packageName)) {
+                throw new Exception("Package '" + packageName + "' not found");
+            } else {
+                ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+                Enumeration<URL> resources = classLoader.getResources(packageName.replace('.', '/'));
 
-            while (resources.hasMoreElements()) {
-                URL resource = resources.nextElement();
-                if (resource.getProtocol().equals("file")) {
-                    File file = new File(resource.toURI());
-                    scanControllers(file, packageName, controllerList, urlMethod);
+                while (resources.hasMoreElements()) {
+                    URL resource = resources.nextElement();
+                    if (resource.getProtocol().equals("file")) {
+                        File file = new File(resource.toURI());
+                        scanControllers(file, packageName, controllerList, urlMethod);
+                    }
                 }
             }
+        } catch (Exception e) {
+            throw e;
         }
     }
 
@@ -132,8 +146,8 @@ public class Utilities {
                             }
                         }
                     }
-                } catch (ClassNotFoundException e) {
-                    throw new Exception(e);
+                } catch (Exception e) {
+                    throw e;
                 }
             }
         }
@@ -286,12 +300,16 @@ public class Utilities {
     }
 
     public void runFramework(HttpServletRequest request, HttpServletResponse response) throws Exception {
-        if (this.ifMethod(request, this.hashMap) != null) {
-            Mapping mapping = this.ifMethod(request, this.hashMap);
-            this.MappingHandler(request, response, mapping);
-        } else {
-            throw new Exception(
-                    "Error 404: \"" + request.getRequestURL().toString() + "\" Not found");
+        try {
+            if (this.ifMethod(request, this.hashMap) != null) {
+                Mapping mapping = this.ifMethod(request, this.hashMap);
+                this.MappingHandler(request, response, mapping);
+            } else {
+                this.status = 404;
+                throw new Exception(request.getRequestURL().toString() + "\" Not found");
+            }
+        } catch (Exception e) {
+            throw e;
         }
     }
 
@@ -552,8 +570,8 @@ public class Utilities {
     public void checkDuplicatedVerbUrl(Mapping mapping, String nameUrl, VerbAction action) throws Exception {
         for (VerbAction act : mapping.getVerbActions()) {
             if (act.getVerb().toUpperCase().trim().equals(action.getVerb().toUpperCase().trim())) {
-                throw new Exception("Error : duplicated verb with the same URL with the method : " + act.getNameMethod()
-                        + " and " + action.getNameMethod());
+                throw new Exception("Duplicated verb with the same URL with the method : " + act.getNameMethod()+" ("+act.getVerb()+") "
+                        + " and " + action.getNameMethod()+" ("+action.getVerb()+") ");
             }
         }
     }
@@ -563,7 +581,7 @@ public class Utilities {
         try {
             Class<?> clazz = Class.forName(mapping.getKey());
             Method[] methods = clazz.getDeclaredMethods();
-            VerbAction verb = null ; 
+            VerbAction verb = null;
             for (VerbAction act : mapping.getVerbActions()) {
                 for (Method method : methods) {
                     if (method.getName().equals(act.getNameMethod().trim())) {
@@ -580,4 +598,34 @@ public class Utilities {
         }
     }
 
+    public void showException( HttpServletRequest request,HttpServletResponse response, String exception) throws IOException {
+        // Définir le type de contenu de la réponse comme HTML
+        response.setContentType("text/html");
+        response.setStatus(status);
+
+        // Obtenir le PrintWriter pour écrire la réponse
+        PrintWriter out = response.getWriter();
+
+        // Écrire le contenu HTML avec le CSS incorporé
+        out.println("<!DOCTYPE html>");
+        out.println("<html lang='fr'>");
+        out.println("<head>");
+        out.println("<meta charset='UTF-8'>");
+        out.println("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+        out.println("<title>Page d'erreur</title>");
+        out.println("<style>");
+        out.println("body { font-family: Arial, sans-serif; background-color: #f0f0f0; color: #333; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }");
+        out.println(".error-container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); text-align: center; }");
+        out.println(".status-code { font-size: 48px; font-weight: bold; color: #e74c3c; margin-bottom: 10px; }");
+        out.println(".description { margin-top: 10px; font-size: 18px; color: #555; }");
+        out.println("</style>");
+        out.println("</head>");
+        out.println("<body>");
+        out.println("<div class='error-container'>");
+        out.println("<div class='status-code'>Status: " + status + "</div>");
+        out.println("<div class='description'>Description: " + exception + "</div>");
+        out.println("</div>");
+        out.println("</body>");
+        out.println("</html>");
+    }
 }
