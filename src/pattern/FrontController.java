@@ -3,10 +3,11 @@ package pattern;
 //All the importation 
 import java.io.IOException;
 import java.io.PrintWriter;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.annotation.MultipartConfig;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,6 +16,7 @@ import initialise.properties.CustomSession;
 import initialise.properties.Mapping;
 
 //the main class FrontController
+@MultipartConfig //To ensure that the servlet will handle an input file 
 public class FrontController extends HttpServlet {
     List<String> controllerList;
     HashMap<String, Mapping> urlMethod;

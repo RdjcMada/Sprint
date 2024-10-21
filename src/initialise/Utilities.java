@@ -23,12 +23,13 @@ import initialise.properties.Mapping;
 import initialise.properties.ModelView;
 import initialise.properties.VerbAction;
 
-import jakarta.servlet.RequestDispatcher;
-import jakarta.servlet.ServletContext;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
+import javax.servlet.RequestDispatcher;
+import javax.servlet.ServletContext;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+import javax.servlet.http.Part;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -206,9 +207,18 @@ public class Utilities {
                 }
 
                 Attribute attribute = parameter.getAnnotation(Attribute.class);
-                if (parameter.getType() != String.class) {
+                if (parameter.getType() != String.class && parameter.getType() != Part.class) {
                     // Send data parameter
                     this.sendDataObject(request, parameter.getType().getName(), parameterValues);
+                } else if (parameter.getType() == Part.class) {
+                    String parameterName = attribute.nom();
+                    Part file = request.getPart(parameterName);
+                    if(file !=null){
+                        String fileName = this.getFileName(file);
+                        parameterValues.add(file);
+                    }else{
+                        throw new Exception("Aucun Fichier recu");
+                    }
                 } else {
                     // Natural selection
                     // if (value != null) {
@@ -570,8 +580,9 @@ public class Utilities {
     public void checkDuplicatedVerbUrl(Mapping mapping, String nameUrl, VerbAction action) throws Exception {
         for (VerbAction act : mapping.getVerbActions()) {
             if (act.getVerb().toUpperCase().trim().equals(action.getVerb().toUpperCase().trim())) {
-                throw new Exception("Duplicated verb with the same URL with the method : " + act.getNameMethod()+" ("+act.getVerb()+") "
-                        + " and " + action.getNameMethod()+" ("+action.getVerb()+") ");
+                throw new Exception("Duplicated verb with the same URL with the method : " + act.getNameMethod() + " ("
+                        + act.getVerb() + ") "
+                        + " and " + action.getNameMethod() + " (" + action.getVerb() + ") ");
             }
         }
     }
@@ -598,7 +609,9 @@ public class Utilities {
         }
     }
 
-    public void showException( HttpServletRequest request,HttpServletResponse response, String exception) throws IOException {
+    // Sprint 11 : Show error
+    public void showException(HttpServletRequest request, HttpServletResponse response, String exception)
+            throws IOException {
         // Définir le type de contenu de la réponse comme HTML
         response.setContentType("text/html");
         response.setStatus(status);
@@ -614,8 +627,10 @@ public class Utilities {
         out.println("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
         out.println("<title>Page d'erreur</title>");
         out.println("<style>");
-        out.println("body { font-family: Arial, sans-serif; background-color: #f0f0f0; color: #333; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }");
-        out.println(".error-container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); text-align: center; }");
+        out.println(
+                "body { font-family: Arial, sans-serif; background-color: #f0f0f0; color: #333; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }");
+        out.println(
+                ".error-container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); text-align: center; }");
         out.println(".status-code { font-size: 48px; font-weight: bold; color: #e74c3c; margin-bottom: 10px; }");
         out.println(".description { margin-top: 10px; font-size: 18px; color: #555; }");
         out.println("</style>");
@@ -627,5 +642,19 @@ public class Utilities {
         out.println("</div>");
         out.println("</body>");
         out.println("</html>");
+    }
+
+    // Sprint 12 : Treatment of the file type
+    private String getFileName(Part part) { //// Function to extract the file name by the Part class
+        String contentDisposition = part.getHeader("content-disposition");
+        if (contentDisposition != null) {
+            // Le nom du fichier est inclus dans l'en-tête content-disposition
+            for (String cdPart : contentDisposition.split(";")) {
+                if (cdPart.trim().startsWith("filename")) {
+                    return cdPart.substring(cdPart.indexOf('=') + 1).trim().replace("\"", "");
+                }
+            }
+        }
+        return null;
     }
 }
