@@ -45,14 +45,14 @@ public class FrontController extends HttpServlet {
         response.setContentType("text/html;charset=UTF-8");
         if (this.except != null) {
             response.setStatus(utl.getStatus());
-            this.utl.showException(request,response,this.except.getMessage());
+            this.utl.showException(request,response,this.except.getMessage(),except.getStackTrace());
             return;
         }
         try {
             utl.runFramework(request, response);
         } catch (Exception e) {
             response.setStatus(utl.getStatus());
-            this.utl.showException(request,response,e.getMessage());
+            this.utl.showException(request,response,e.getMessage(),e.getStackTrace());
         }
     }
 
