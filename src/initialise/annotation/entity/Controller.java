@@ -1,4 +1,4 @@
-package initialise.annotation;
+package initialise.annotation.entity;
 
 import java.lang.annotation.*;
 

@@ -10,18 +10,19 @@ import java.lang.reflect.Parameter;
 import java.net.URL;
 import java.util.*;
 
-import initialise.annotation.Attribute;
-import initialise.annotation.Controller;
-import initialise.annotation.Get;
-import initialise.annotation.Post;
-import initialise.annotation.Url;
-import initialise.annotation.RestAPI;
-
+import initialise.annotation.entity.Controller;
+import initialise.annotation.argument.Param;
+import initialise.annotation.mapping.Get;
+import initialise.annotation.mapping.Post;
+import initialise.annotation.mapping.RestAPI;
+import initialise.annotation.mapping.Url;
 import initialise.properties.AnnotatedParameter;
+import initialise.properties.AnnotationHandler;
 import initialise.properties.CustomSession;
 import initialise.properties.Mapping;
 import initialise.properties.ModelView;
 import initialise.properties.VerbAction;
+import initialise.properties.Files;
 
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletContext;
@@ -189,9 +190,9 @@ public class Utilities {
 
             for (Parameter parameter : method.getParameters()) {
                 // Exception if the parameter isn't annoted
-                if (!parameter.isAnnotationPresent(Attribute.class)
+                if (!parameter.isAnnotationPresent(Param.class)
                         && !parameter.getType().equals(CustomSession.class)) {
-                    throw new Exception("Tous les paramètres doivent être annotés avec @Attribute");
+                    throw new Exception("Tous les paramètres doivent être annotés avec @Param");
                 }
 
                 /*
@@ -206,17 +207,20 @@ public class Utilities {
                     parameterValues.add(this.session);
                 }
 
-                Attribute attribute = parameter.getAnnotation(Attribute.class);
-                if (parameter.getType() != String.class && parameter.getType() != Part.class) {
+                Param param = parameter.getAnnotation(Param.class);
+
+                if (parameter.getType() != String.class && parameter.getType() != initialise.properties.Files.class) {
                     // Send data parameter
-                    this.sendDataObject(request, parameter.getType().getName(), parameterValues);
-                } else if (parameter.getType() == Part.class) {
-                    String parameterName = attribute.nom();
+                    this.sendDataObject(request, parameter.getType().getName(), parameterValues, param);
+
+                } else if (parameter.getType() == initialise.properties.Files.class) {
+                    String parameterName = param.nom();
                     Part file = request.getPart(parameterName);
-                    if(file !=null){
+                    if (file != null) {
                         String fileName = this.getFileName(file);
-                        parameterValues.add(file);
-                    }else{
+                        Files fl = Files.convertPartToFile(file, fileName);
+                        parameterValues.add(fl);
+                    } else {
                         throw new Exception("Aucun Fichier recu");
                     }
                 } else {
@@ -224,8 +228,8 @@ public class Utilities {
                     // if (value != null) {
                     // parameterValues.add(castValue(parameter.getType(), value));
                     // } else
-                    if (attribute != null) { // Annotation selection
-                        String parameterName = attribute.nom();
+                    if (param != null) { // Annotation selection
+                        String parameterName = param.nom();
                         String parameterValue = request.getParameter(parameterName);
                         if (parameterValue != null) {
                             parameterValues.add(castValue(parameter.getType(), parameterValue));
@@ -339,9 +343,9 @@ public class Utilities {
 
         Parameter[] parameters = method.getParameters();
         for (Parameter parameter : parameters) {
-            if (parameter.isAnnotationPresent(Attribute.class)) {
-                Attribute attribute = parameter.getAnnotation(Attribute.class);
-                annotatedParameters.add(new AnnotatedParameter(attribute.nom(), parameter.getType()));
+            if (parameter.isAnnotationPresent(Param.class)) {
+                Param param = parameter.getAnnotation(Param.class);
+                annotatedParameters.add(new AnnotatedParameter(param.nom(), parameter.getType()));
             }
         }
         return annotatedParameters;
@@ -397,77 +401,60 @@ public class Utilities {
 
     // Function for the sprint 7
     /// Function to the objectParameters the value from the get http
-    public void sendDataObject(HttpServletRequest request, String nameObject, List<Object> parameterValues)
+    public void sendDataObject(HttpServletRequest request, String nameObject, List<Object> parameterValues, Param param)
             throws Exception {
-        Enumeration<String> parameterNames = request.getParameterNames();
-        String[] packages = nameObject.trim().split("\\."); // Escape dot with double backslash
-        List<String> objectTreated = new ArrayList<>();
+        Class<?> clazz = Class.forName(nameObject);
+        Object obj = clazz.getDeclaredConstructor().newInstance();
 
-        while (parameterNames.hasMoreElements()) {
-            String parameterName = parameterNames.nextElement();
-            // Check if the parameter name contains the last part of the package name and
-            // hasn't been processed yet
-            if (parameterName.trim().toLowerCase().contains(packages[packages.length - 1].toLowerCase())
-                    && !objectTreated.contains(packages[packages.length - 1].toLowerCase())) {
-                try {
-                    Class<?> clazz = Class.forName(nameObject);
-                    Object obj = clazz.getDeclaredConstructor().newInstance();
 
-                    Enumeration<String> innerParameterNames = request.getParameterNames();
 
-                    while (innerParameterNames.hasMoreElements()) {
-                        String attrib = innerParameterNames.nextElement();
+        Enumeration<String> innerParameterNames = request.getParameterNames();
 
-                        // Check if the attribute name contains the last part of the package name
-                        if (attrib.trim().toLowerCase().contains(packages[packages.length - 1].toLowerCase())) {
-                            // Get the value to set
-                            String value = request.getParameter(attrib);
-                            // Determine the attribute name without the package prefix
-                            String prefix = packages[packages.length - 1].toLowerCase() + ".";
-                            if (attrib.toLowerCase().startsWith(prefix)) {
-                                String nameAttribute = attrib.substring(prefix.length());
+        try {
+            while (innerParameterNames.hasMoreElements()) {
+                // Get the current value and doing another iteration
+                String attrib = innerParameterNames.nextElement();
 
-                                // Capitalize the first letter of the attribute name
-                                nameAttribute = nameAttribute.substring(0, 1).toUpperCase()
-                                        + nameAttribute.substring(1);
+                // Get the value of the HttpRequest
+                String value = request.getParameter(attrib);
 
-                                // Construct setter method name
-                                String setterMethodName = "set" + nameAttribute;
+                // Treat the attribute return
+                if (parameterNameValue(attrib, nameObject) != null) {
+                    Field fieldAttribute = parameterNameValue(attrib, nameObject);
+                    fieldAttribute.setAccessible(true);
+                    String nameAttribute = fieldAttribute.getName();
+                    nameAttribute = nameAttribute.substring(0, 1).toUpperCase() + nameAttribute.substring(1);
+                    
+                    String setterMethodName = "set" + nameAttribute;
 
-                                // Get the setter method
-                                Method[] methods = clazz.getMethods();
-                                Method setterMethod = null;
-                                for (Method method : methods) {
-                                    if (method.getName().equalsIgnoreCase(setterMethodName)) {
-                                        setterMethod = method;
-                                        break;
-                                    }
-                                }
-
-                                if (setterMethod != null) {
-                                    // Get the parameter type of the setter method
-                                    Class<?>[] parameterTypes = setterMethod.getParameterTypes();
-                                    // Convert and cast value to the parameter type of the setter method
-                                    Object convertedValue = convertAndCastValue(value, parameterTypes[0]);
-                                    // Invoke the setter method on the object
-                                    setterMethod.invoke(obj, convertedValue);
-                                } else {
-                                    throw new Exception("Setter method not found for attribute: " + nameAttribute);
-                                }
-                            }
+                    // Get the setter method
+                    Method[] methods = clazz.getMethods();
+                    Method setterMethod = null;
+                    for (Method method : methods) {
+                        if (method.getName().equals(setterMethodName)) {
+                            setterMethod = method;
+                            break;
                         }
                     }
 
-                    // Mark the class name as processed
-                    objectTreated.add(packages[packages.length - 1].toLowerCase());
-
-                    // Add the value to the list of objects
-                    parameterValues.add(obj);
-
-                } catch (Exception e) {
-                    throw new Exception("Error processing object: " + e.getMessage(), e);
+                    if (setterMethod != null) {
+                        AnnotationHandler.check(nameObject, fieldAttribute.getName(), value, fieldAttribute.getType());
+                        // Convert and cast value to the parameter type of the setter method
+                        Object convertedValue = convertAndCastValue(value, fieldAttribute.getType());
+                        // Invoke the setter method on the object
+                        setterMethod.invoke(obj, convertedValue);
+                    } else {
+                        throw new Exception("Setter method not found for attribute: " + nameAttribute);
+                    }
+                    fieldAttribute.setAccessible(false);
                 }
             }
+
+            // Add the value to the list of objects
+            parameterValues.add(obj);
+
+        } catch (Exception e) {
+            throw e;
         }
     }
 
@@ -610,7 +597,8 @@ public class Utilities {
     }
 
     // Sprint 11 : Show error
-    public void showException(HttpServletRequest request, HttpServletResponse response, String exception)
+    public void showException(HttpServletRequest request, HttpServletResponse response, String exception,
+            StackTraceElement[] elements)
             throws IOException {
         // Définir le type de contenu de la réponse comme HTML
         response.setContentType("text/html");
@@ -625,20 +613,30 @@ public class Utilities {
         out.println("<head>");
         out.println("<meta charset='UTF-8'>");
         out.println("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
-        out.println("<title>Page d'erreur</title>");
+        out.println("<title>Erreur du Serveur</title>");
         out.println("<style>");
         out.println(
-                "body { font-family: Arial, sans-serif; background-color: #f0f0f0; color: #333; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }");
+                "body { font-family: Arial, sans-serif; background-color: #1b1b1b; color: #eaeaea; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }");
         out.println(
-                ".error-container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); text-align: center; }");
-        out.println(".status-code { font-size: 48px; font-weight: bold; color: #e74c3c; margin-bottom: 10px; }");
-        out.println(".description { margin-top: 10px; font-size: 18px; color: #555; }");
+                ".error-container { max-width: 600px; background: #2c2c2c; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); text-align: left; }");
+        out.println(".status-code { font-size: 36px; font-weight: bold; color: #ff6b6b; margin-bottom: 5px; }");
+        out.println(".error-title { font-size: 24px; margin-bottom: 20px; color: #ffab00; }");
+        out.println(".description { font-size: 16px; line-height: 1.5; color: #bbbbbb; margin-bottom: 20px; }");
+        out.println(
+                ".stack-trace { background: #1e1e1e; padding: 10px; border-radius: 5px; overflow-y: auto; max-height: 200px; font-size: 14px; line-height: 1.4; color: #aaa; }");
+        out.println(".stack-trace div { padding: 2px 0; }");
         out.println("</style>");
         out.println("</head>");
         out.println("<body>");
         out.println("<div class='error-container'>");
-        out.println("<div class='status-code'>Status: " + status + "</div>");
-        out.println("<div class='description'>Description: " + exception + "</div>");
+        out.println("<div class='status-code'>Erreur " + status + "</div>");
+        out.println("<div class='error-title'>Un problème est survenu</div>");
+        out.println("<div class='description'>" + exception + "</div>");
+        out.println("<div class='stack-trace'>");
+        for (StackTraceElement element : elements) {
+            out.println("<div>&bull; " + element.toString() + "</div>");
+        }
+        out.println("</div>");
         out.println("</div>");
         out.println("</body>");
         out.println("</html>");
@@ -655,6 +653,31 @@ public class Utilities {
                 }
             }
         }
+        return null;
+    }
+
+    // Sprint 13 : Annotation condition Handler By the class
+    public Field parameterNameValue(String parameterRequest, String nameClass) throws Exception {
+        // that will check if the parameterName in the request Http is contained in the
+        // class as an attribute
+
+        // Treatment of the parameter
+        try {
+            Class<?> clazz = Class.forName(nameClass);
+            Field[] fields = clazz.getDeclaredFields();
+
+            for (Field field : fields) {
+                String[] partsParemeterRequest = parameterRequest.trim().split("\\.");
+                if (partsParemeterRequest[partsParemeterRequest.length - 1].trim().toLowerCase()
+                        .equals(field.getName().trim().toLowerCase())) {
+                    return field;
+                }
+            }
+        } catch (Exception e) {
+            throw e;
+        }
+
+        // Return null if there is no corresponding parameter
         return null;
     }
 }
