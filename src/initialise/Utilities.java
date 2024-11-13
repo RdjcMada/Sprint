@@ -403,79 +403,58 @@ public class Utilities {
     /// Function to the objectParameters the value from the get http
     public void sendDataObject(HttpServletRequest request, String nameObject, List<Object> parameterValues, Param param)
             throws Exception {
-        Enumeration<String> parameterNames = request.getParameterNames();
-        String[] packages = nameObject.trim().split("\\."); // Escape dot with double backslash
-        List<String> objectTreated = new ArrayList<>();
+        Class<?> clazz = Class.forName(nameObject);
+        Object obj = clazz.getDeclaredConstructor().newInstance();
 
-        while (parameterNames.hasMoreElements()) {
-            String parameterName = parameterNames.nextElement();
-            // Check if the parameter name contains the last part of the package name and
-            // hasn't been processed yet
-            if (parameterName.trim().toLowerCase().contains(packages[packages.length - 1].toLowerCase())
-                    && !objectTreated.contains(packages[packages.length - 1].toLowerCase())) {
-                try {
-                    Class<?> clazz = Class.forName(nameObject);
-                    Object obj = clazz.getDeclaredConstructor().newInstance();
 
-                    Enumeration<String> innerParameterNames = request.getParameterNames();
 
-                    while (innerParameterNames.hasMoreElements()) {
-                        String attrib = innerParameterNames.nextElement();
+        Enumeration<String> innerParameterNames = request.getParameterNames();
 
-                        // Check if the attribute name contains the last part of the package name
-                        if (attrib.trim().toLowerCase().contains(packages[packages.length - 1].toLowerCase())) {
-                            String[] partAttrib = attrib.split("\\.");
-                            // Get the value to set
-                            String value = request.getParameter(param.nom().trim() + partAttrib[partAttrib.length - 1]);
-                            System.out.println(value);
+        try {
+            while (innerParameterNames.hasMoreElements()) {
+                // Get the current value and doing another iteration
+                String attrib = innerParameterNames.nextElement();
 
-                            // Determine the attribute name without the package prefix
-                            String prefix = packages[packages.length - 1].toLowerCase() + ".";
-                            if (attrib.toLowerCase().startsWith(prefix)) {
-                                String nameAttribute = attrib.substring(prefix.length());
+                // Get the value of the HttpRequest
+                String value = request.getParameter(attrib);
 
-                                // Capitalize the first letter of the attribute name
-                                nameAttribute = nameAttribute.substring(0, 1).toUpperCase()
-                                        + nameAttribute.substring(1);
+                // Treat the attribute return
+                if (parameterNameValue(attrib, nameObject) != null) {
+                    Field fieldAttribute = parameterNameValue(attrib, nameObject);
+                    fieldAttribute.setAccessible(true);
+                    String nameAttribute = fieldAttribute.getName();
+                    nameAttribute = nameAttribute.substring(0, 1).toUpperCase() + nameAttribute.substring(1);
+                    
+                    String setterMethodName = "set" + nameAttribute;
 
-                                // Construct setter method name
-                                String setterMethodName = "set" + nameAttribute;
-
-                                // Get the setter method
-                                Method[] methods = clazz.getMethods();
-                                Method setterMethod = null;
-                                for (Method method : methods) {
-                                    if (method.getName().equalsIgnoreCase(setterMethodName)) {
-                                        setterMethod = method;
-                                        break;
-                                    }
-                                }
-
-                                if (setterMethod != null) {
-                                    // Get the parameter type of the setter method
-                                    Class<?>[] parameterTypes = setterMethod.getParameterTypes();
-                                    AnnotationHandler.check(nameObject, nameAttribute, value, parameterTypes[0]);
-                                    // Convert and cast value to the parameter type of the setter method
-                                    Object convertedValue = convertAndCastValue(value, parameterTypes[0]);
-                                    // Invoke the setter method on the object
-                                    setterMethod.invoke(obj, convertedValue);
-                                } else {
-                                    throw new Exception("Setter method not found for attribute: " + nameAttribute);
-                                }
-                            }
+                    // Get the setter method
+                    Method[] methods = clazz.getMethods();
+                    Method setterMethod = null;
+                    for (Method method : methods) {
+                        if (method.getName().equals(setterMethodName)) {
+                            setterMethod = method;
+                            break;
                         }
                     }
 
-                    // Mark the class name as processed
-                    objectTreated.add(packages[packages.length - 1].toLowerCase());
-
-                    // Add the value to the list of objects
-                    parameterValues.add(obj);
-
-                } catch (Exception e) {
-                    throw new Exception("Error processing object: " + e.getMessage(), e);
+                    if (setterMethod != null) {
+                        AnnotationHandler.check(nameObject, fieldAttribute.getName(), value, fieldAttribute.getType());
+                        // Convert and cast value to the parameter type of the setter method
+                        Object convertedValue = convertAndCastValue(value, fieldAttribute.getType());
+                        // Invoke the setter method on the object
+                        setterMethod.invoke(obj, convertedValue);
+                    } else {
+                        throw new Exception("Setter method not found for attribute: " + nameAttribute);
+                    }
+                    fieldAttribute.setAccessible(false);
                 }
             }
+
+            // Add the value to the list of objects
+            parameterValues.add(obj);
+
+        } catch (Exception e) {
+            throw e;
         }
     }
 
@@ -678,5 +657,27 @@ public class Utilities {
     }
 
     // Sprint 13 : Annotation condition Handler By the class
+    public Field parameterNameValue(String parameterRequest, String nameClass) throws Exception {
+        // that will check if the parameterName in the request Http is contained in the
+        // class as an attribute
 
+        // Treatment of the parameter
+        try {
+            Class<?> clazz = Class.forName(nameClass);
+            Field[] fields = clazz.getDeclaredFields();
+
+            for (Field field : fields) {
+                String[] partsParemeterRequest = parameterRequest.trim().split("\\.");
+                if (partsParemeterRequest[partsParemeterRequest.length - 1].trim().toLowerCase()
+                        .equals(field.getName().trim().toLowerCase())) {
+                    return field;
+                }
+            }
+        } catch (Exception e) {
+            throw e;
+        }
+
+        // Return null if there is no corresponding parameter
+        return null;
+    }
 }
