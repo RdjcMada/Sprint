@@ -23,6 +23,7 @@ import initialise.properties.Mapping;
 import initialise.properties.ModelView;
 import initialise.properties.VerbAction;
 import initialise.properties.Files;
+import initialise.properties.AttributeException;
 
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletContext;
@@ -35,6 +36,7 @@ import javax.servlet.http.Part;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
+
 
 //. The sub class Utilities (that directly iteract with the methods of the FrameWork)
 public class Utilities {
@@ -259,7 +261,7 @@ public class Utilities {
 
             return val;
         } catch (Exception e) {
-            throw new Exception(e);
+            throw e;
         }
     }
 
@@ -406,7 +408,10 @@ public class Utilities {
         Class<?> clazz = Class.forName(nameObject);
         Object obj = clazz.getDeclaredConstructor().newInstance();
 
-
+        //Map for the input values (Sprint14)
+        AttributeException except = new AttributeException();
+        except.setValues(new HashMap<>());
+        except.setErrors(new HashMap<>());
 
         Enumeration<String> innerParameterNames = request.getParameterNames();
 
@@ -424,7 +429,7 @@ public class Utilities {
                     fieldAttribute.setAccessible(true);
                     String nameAttribute = fieldAttribute.getName();
                     nameAttribute = nameAttribute.substring(0, 1).toUpperCase() + nameAttribute.substring(1);
-                    
+
                     String setterMethodName = "set" + nameAttribute;
 
                     // Get the setter method
@@ -438,7 +443,7 @@ public class Utilities {
                     }
 
                     if (setterMethod != null) {
-                        AnnotationHandler.check(nameObject, fieldAttribute.getName(), value, fieldAttribute.getType());
+                        AnnotationHandler.check(nameObject, fieldAttribute.getName(), value, fieldAttribute.getType(),except);
                         // Convert and cast value to the parameter type of the setter method
                         Object convertedValue = convertAndCastValue(value, fieldAttribute.getType());
                         // Invoke the setter method on the object
@@ -448,6 +453,11 @@ public class Utilities {
                     }
                     fieldAttribute.setAccessible(false);
                 }
+            }
+
+            //----------------------- Sprint 14 -----------------------------------
+            if (!except.getErrors().isEmpty()) { //Srptin14
+                throw except;
             }
 
             // Add the value to the list of objects
