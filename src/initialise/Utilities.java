@@ -23,7 +23,6 @@ import initialise.properties.Mapping;
 import initialise.properties.ModelView;
 import initialise.properties.VerbAction;
 import initialise.properties.Files;
-import initialise.properties.AttributeException;
 
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletContext;
@@ -213,7 +212,7 @@ public class Utilities {
 
                 if (parameter.getType() != String.class && parameter.getType() != initialise.properties.Files.class) {
                     // Send data parameter
-                    this.sendDataObject(request, parameter.getType().getName(), parameterValues, param);
+                    this.sendDataObject(request,response, parameter.getType().getName(), parameterValues, param);
 
                 } else if (parameter.getType() == initialise.properties.Files.class) {
                     String parameterName = param.nom();
@@ -403,15 +402,10 @@ public class Utilities {
 
     // Function for the sprint 7
     /// Function to the objectParameters the value from the get http
-    public void sendDataObject(HttpServletRequest request, String nameObject, List<Object> parameterValues, Param param)
+    public void sendDataObject(HttpServletRequest request,HttpServletResponse response, String nameObject, List<Object> parameterValues, Param param)
             throws Exception {
         Class<?> clazz = Class.forName(nameObject);
         Object obj = clazz.getDeclaredConstructor().newInstance();
-
-        //Map for the input values (Sprint14)
-        AttributeException except = new AttributeException();
-        except.setValues(new HashMap<>());
-        except.setErrors(new HashMap<>());
 
         Enumeration<String> innerParameterNames = request.getParameterNames();
 
@@ -443,7 +437,7 @@ public class Utilities {
                     }
 
                     if (setterMethod != null) {
-                        AnnotationHandler.check(nameObject, fieldAttribute.getName(), value, fieldAttribute.getType(),except);
+                        (new AnnotationHandler()).check(request,response,nameObject, fieldAttribute.getName(), value, fieldAttribute.getType());
                         // Convert and cast value to the parameter type of the setter method
                         Object convertedValue = convertAndCastValue(value, fieldAttribute.getType());
                         // Invoke the setter method on the object
@@ -453,11 +447,6 @@ public class Utilities {
                     }
                     fieldAttribute.setAccessible(false);
                 }
-            }
-
-            //----------------------- Sprint 14 -----------------------------------
-            if (!except.getErrors().isEmpty()) { //Srptin14
-                throw except;
             }
 
             // Add the value to the list of objects
@@ -690,4 +679,5 @@ public class Utilities {
         // Return null if there is no corresponding parameter
         return null;
     }
+
 }
